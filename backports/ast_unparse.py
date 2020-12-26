@@ -588,7 +588,7 @@ class _Unparser(NodeVisitor):
         elif value is ...:
             self.write("...")
         else:
-            if node.kind == "u":
+            if getattr(node, "kind", False) and node.kind == "u":
                 self.write("u")
             self._write_constant(node.value)
 
@@ -815,7 +815,7 @@ class _Unparser(NodeVisitor):
                     comma = True
                 self.traverse(e)
 
-    def visit_Subscript(self, node):
+    def visit_Index(self, node):
         def is_simple_tuple(slice_value):
             # when unparsing a non-empty tuple, the parantheses can be safely
             # omitted if there aren't any elements that explicitly requires
@@ -825,15 +825,39 @@ class _Unparser(NodeVisitor):
                 and slice_value.elts
                 and not any(isinstance(elt, Starred) for elt in slice_value.elts)
             )
+        if is_simple_tuple(node.value):
+            self.items_view(self.traverse, node.value.elts)
+        else:
+            self.traverse(node.value)
 
-        self.set_precedence(_Precedence.ATOM, node.value)
-        self.traverse(node.value)
-        with self.delimit("[", "]"):
-            if is_simple_tuple(node.slice):
-                self.items_view(self.traverse, node.slice.elts)
-            else:
+    def visit_ExtSlice(self, node):
+        self.items_view(self.traverse, node.dims)
+
+    if sys.version_info > (3, 9):
+        def visit_Subscript(self, node):
+            def is_simple_tuple(slice_value):
+                # when unparsing a non-empty tuple, the parantheses can be safely
+                # omitted if there aren't any elements that explicitly requires
+                # parantheses (such as starred expressions).
+                return (
+                    isinstance(slice_value, Tuple)
+                    and slice_value.elts
+                    and not any(isinstance(elt, Starred) for elt in slice_value.elts)
+                )
+            self.set_precedence(_Precedence.ATOM, node.value)
+            self.traverse(node.value)
+            with self.delimit("[", "]"):
+                if is_simple_tuple(node.slice):
+                    self.items_view(self.traverse, node.slice.elts)
+                else:
+                    self.traverse(node.slice)
+
+    elif sys.version_info > (3, 8):
+        def visit_Subscript(self, node):
+            self.traverse(node.value)
+            with self.delimit("[", "]"):
                 self.traverse(node.slice)
-
+    
     def visit_Starred(self, node):
         self.write("*")
         self.set_precedence(_Precedence.EXPR, node.value)
