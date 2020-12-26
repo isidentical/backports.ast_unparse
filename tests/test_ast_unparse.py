@@ -129,7 +129,7 @@ class ASTTestCase(unittest.TestCase):
 
     def check_invalid(self, node, raises=ValueError):
         with self.subTest(node=node):
-            self.assertRaises(raises, ast.unparse, node)
+            self.assertRaises(raises, unparse, node)
 
     def get_source(self, code1, code2=None):
         code2 = code2 or code1
